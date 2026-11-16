@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeloRide — Next-Gen Mobility & Ride Booking</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        darkBg: '#090D16',
+                        panelBg: 'rgba(15, 23, 42, 0.82)',
+                        volt: '#FACC15',
+                        emeraldNeon: '#10B981',
+                        cyanNeon: '#06B6D4',
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'radar': 'radarPing 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+                    },
+                    keyframes: {
+                        radarPing: {
+                            '0%': { transform: 'scale(0.4)', opacity: '0.9' },
+                            '100%': { transform: 'scale(2.4)', opacity: '0' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar & Glassmorphism Utilities */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.4);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(250, 204, 21, 0.6);
+        }
+
+        .glass-panel {
+            background: rgba(13, 19, 33, 0.84);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.48);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            background: rgba(30, 41, 59, 0.78);
+            border-color: rgba(250, 204, 21, 0.35);
+            transform: translateY(-1px);
+        }
+
+        .glass-card.selected {
+            background: linear-gradient(135deg, rgba(250, 204, 21, 0.14), rgba(16, 185, 129, 0.08));
+            border-color: #FACC15;
+            box-shadow: 0 0 20px rgba(250, 204, 21, 0.16);
+        }
+
+        /* Map Canvas Fullscreen Background */
+        #cityMapCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        #cityMapCanvas:active {
+            cursor: grabbing;
+        }
+
+        /* Custom Glow Effects */
+        .btn-primary-glow {
+            background: linear-gradient(135deg, #FACC15 0%, #F59E0B 100%);
+            box-shadow: 0 10px 25px -5px rgba(250, 204, 21, 0.45);
+            transition: all 0.2s ease;
+        }
+        .btn-primary-glow:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px -5px rgba(250, 204, 21, 0.65);
+        }
+        .btn-primary-glow:active {
+            transform: translateY(1px);
+        }
+
+        .btn-emerald-glow {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.45);
+        }
+
+        /* Toast Notification */
+        #toastContainer {
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-darkBg text-slate-100 font-sans antialiased overflow-hidden select-none h-screen w-screen relative">
+
+    <!-- FULLSCREEN INTERACTIVE CITY MAP CANVAS -->
+    <div id="mapWrapper" class="absolute inset-0 z-0">
+        <canvas id="cityMapCanvas"></canvas>
+    </div>
+
+    <!-- AMBIENT VIGNETTE OVERLAY FOR DEPTH -->
+    <div class="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,transparent_45%,rgba(9,13,22,0.75)_100%)]"></div>
+
+    <!-- TOP FLOATING HEADER BAR -->
+    <header class="relative z-20 flex items-center justify-between px-4 sm:px-6 pt-4 pointer-events-none">
+        <!-- Brand Logo & Live City Status -->
+        <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-3 pointer-events-auto">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center text-slate-950 font-extrabold text-lg shadow-lg shadow-yellow-500/30">
+                <i class="fa-solid fa-bolt"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="font-extrabold text-lg tracking-tight text-white">Velo<span class="text-yellow-400">Ride</span></span>
+                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Live</span>
+                </div>
+                <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    Hubballi Smart Grid • <span id="activeDriversCount" class="text-slate-200 font-semibold">24</span> Captains Active
+                </p>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs & Wallet Quick Pill -->
+        <div class="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+            <!-- Navigation Pill -->
+            <nav class="glass-panel rounded-2xl p-1 flex items-center gap-1">
+                <button onclick="switchTab('book')" id="nav-book" class="nav-tab px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 bg-yellow-400 text-slate-950 shadow transition-all">
+                    <i class="fa-solid fa-location-arrow"></i>
+                    <span class="hidden sm:inline">Book Ride</span>
+                </button>
+                <button onclick="switchTab('history')" id="nav-history" class="nav-tab px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span class="hidden sm:inline">My Trips</span>
+                    <span id="tripBadge" class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-700 text-yellow-400">2</span>
+                </button>
+                <button onclick="switchTab('wallet')" id="nav-wallet" class="nav-tab px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-wallet"></i>
+                    <span class="font-mono text-emerald-400">₹<span id="headerWalletBalance">850</span></span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- MAP CONTROLS & LEGEND (TOP RIGHT / BOTTOM RIGHT FLOATING) -->
+    <div class="hidden md:flex flex-col gap-2.5 absolute right-6 top-24 z-10 pointer-events-auto">
+        <!-- Surge & Traffic Pill -->
+        <div class="glass-panel rounded-2xl p-3 w-56 space-y-2.5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <i class="fa-solid fa-fire text-amber-400"></i> Surge Demand
+                </span>
+                <button id="surgeToggleBtn" onclick="toggleSurge()" class="text-[11px] font-mono font-bold px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:border-yellow-400 transition">
+                    1.0x Normal
+                </button>
+            </div>
+            <div class="h-px bg-slate-800"></div>
+            <div class="space-y-1.5 text-[11px] text-slate-400">
+                <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block shadow shadow-yellow-400/50"></span> Bike Taxi</span>
+                    <span class="font-mono text-slate-300">Fastest</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow shadow-emerald-400/50"></span> Auto Rickshaw</span>
+                    <span class="font-mono text-slate-300">Doorstep</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block shadow shadow-cyan-400/50"></span> Mini / Prime Cabs</span>
+                    <span class="font-mono text-slate-300">AC Comfort</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Recenter & Zoom Controls -->
+        <div class="glass-panel rounded-2xl p-1.5 flex items-center justify-around">
+            <button onclick="recenterMap()" title="Recenter Map" class="p-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-yellow-400 transition">
+                <i class="fa-solid fa-crosshairs"></i>
+            </button>
+            <button onclick="zoomMap(0.15)" title="Zoom In" class="p-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+            <button onclick="zoomMap(-0.15)" title="Zoom Out" class="p-2.5 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition">
+                <i class="fa-solid fa-minus"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN LEFT / BOTTOM RESPONSIVE BOOKING WORKSPACE -->
+    <main class="relative z-20 h-[calc(100vh-80px)] flex flex-col justify-end md:justify-start md:pt-5 px-3 sm:px-6 pb-4 pointer-events-none">
+        
+        <!-- VIEW 1: RIDE BOOKING PANEL -->
+        <section id="view-book" class="glass-panel rounded-3xl w-full md:w-[440px] max-h-[76vh] md:max-h-[86vh] flex flex-col overflow-hidden pointer-events-auto transition-all duration-300">
+            
+            <!-- STAGE A: LOCATION & VEHICLE SELECTION -->
+            <div id="stage-select" class="flex flex-col h-full overflow-y-auto p-4 sm:p-5 space-y-4">
+                
+                <!-- Location Inputs Card -->
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 relative">
+                    <div class="flex items-stretch gap-3">
+                        <!-- Route Timeline Connector -->
+                        <div class="flex flex-col items-center justify-between py-2.5">
+                            <div class="w-3 h-3 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20"></div>
+                            <div class="w-0.5 flex-1 bg-gradient-to-b from-emerald-400 via-slate-600 to-yellow-400 my-1"></div>
+                            <div class="w-3 h-3 rounded-sm bg-yellow-400 ring-4 ring-yellow-400/20"></div>
+                        </div>
+
+                        <!-- Pickup & Drop Selectors -->
+                        <div class="flex-1 space-y-2.5">
+                            <div>
+                                <label class="text-[10px] uppercase tracking-wider font-bold text-emerald-400 block mb-0.5">Pickup Location</label>
+                                <select id="pickupSelect" onchange="handleLocationChange()" class="w-full bg-slate-800/90 text-white text-sm font-semibold rounded-xl px-3 py-2 border border-slate-700/80 focus:outline-none focus:border-emerald-400 transition cursor-pointer">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[10px] uppercase tracking-wider font-bold text-yellow-400 block mb-0.5">Drop-off Destination</label>
+                                <select id="dropSelect" onchange="handleLocationChange()" class="w-full bg-slate-800/90 text-white text-sm font-semibold rounded-xl px-3 py-2 border border-slate-700/80 focus:outline-none focus:border-yellow-400 transition cursor-pointer">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Swap Button -->
+                        <div class="flex items-center">
+                            <button onclick="swapLocations()" title="Swap Pickup & Drop" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-yellow-400 flex items-center justify-center transition">
+                                <i class="fa-solid fa-arrows-up-down text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Route Metrics Strip -->
+                    <div class="mt-3 pt-2.5 border-t border-slate-800/90 flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-3">
+                            <span class="text-slate-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-route text-cyan-400"></i>
+                                <strong id="routeDistance" class="text-white font-mono">4.8 km</strong>
+                            </span>
+                            <span class="text-slate-600">•</span>
+                            <span class="text-slate-400 flex items-center gap-1.5">
+                                <i class="fa-regular fa-clock text-emerald-400"></i>
+                                <strong id="routeDuration" class="text-white font-mono">12 mins</strong>
+                            </span>
+                        </div>
+                        <span id="trafficStatusBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                            Smooth Traffic
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Vehicle Tier Selector -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Choose Your Ride</h3>
+                        <span class="text-[11px] text-slate-400">Tap map pins to change route</span>
+                    </div>
+                    <div id="vehicleList" class="space-y-2">
+                        <!-- Dynamically Rendered Vehicle Cards -->
+                    </div>
+                </div>
+
+                <!-- Promo Code & Payment Row -->
+                <div class="grid grid-cols-2 gap-2.5 pt-1">
+                    <!-- Promo Input -->
+                    <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2 flex items-center justify-between gap-1.5">
+                        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                            <i class="fa-solid fa-tag text-yellow-400 text-xs"></i>
+                            <input id="promoInput" type="text" placeholder="RIDE50 / FIRST100" class="bg-transparent text-xs font-mono uppercase text-white placeholder-slate-500 focus:outline-none w-full">
+                        </div>
+                        <button onclick="applyPromoCode()" id="applyPromoBtn" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-yellow-400/20 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950 transition">
+                            Apply
+                        </button>
+                    </div>
+
+                    <!-- Payment Method Selector -->
+                    <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2 flex items-center gap-2">
+                        <i class="fa-solid fa-credit-card text-emerald-400 text-xs"></i>
+                        <select id="paymentMethodSelect" class="bg-transparent text-xs font-semibold text-white focus:outline-none w-full cursor-pointer">
+                            <option value="VeloWallet" class="bg-slate-900">VeloWallet (₹850)</option>
+                            <option value="UPI" class="bg-slate-900">UPI / GPay / PhonePe</option>
+                            <option value="Cash" class="bg-slate-900">Cash after Ride</option>
+                            <option value="Card" class="bg-slate-900">Credit / Debit Card</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Active Discount Banner (Hidden by default) -->
+                <div id="promoAppliedBanner" class="hidden items-center justify-between bg-emerald-500/15 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs text-emerald-300">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                        <span id="promoBannerText">Promo RIDE50 applied!</span>
+                    </span>
+                    <button onclick="removePromoCode()" class="text-slate-400 hover:text-white text-[11px] underline">Remove</button>
+                </div>
+
+                <!-- Primary Book CTA Button -->
+                <button onclick="startBookingSearch()" id="bookNowBtn" class="btn-primary-glow w-full py-3.5 rounded-2xl text-slate-950 font-extrabold text-sm sm:text-base flex items-center justify-between px-5 mt-auto">
+                    <span class="flex items-center gap-2">
+                        <span>Book <span id="ctaVehicleName">Velo Bike</span></span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </span>
+                    <span class="font-mono text-base sm:text-lg bg-slate-950/15 px-2.5 py-0.5 rounded-xl">
+                        ₹<span id="ctaFinalFare">45</span>
+                    </span>
+                </button>
+            </div>
+
+            <!-- STAGE B: SEARCHING FOR NEARBY CAPTAINS -->
+            <div id="stage-searching" class="hidden flex-col items-center justify-center text-center p-6 sm:p-8 space-y-6 my-auto">
+                <div class="relative w-32 h-32 flex items-center justify-center">
+                    <div class="absolute inset-0 rounded-full bg-yellow-400/30 animate-radar"></div>
+                    <div class="absolute inset-3 rounded-full bg-yellow-400/20 animate-radar" style="animation-delay: 0.6s"></div>
+                    <div class="relative w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center text-slate-950 text-2xl shadow-xl shadow-yellow-500/40">
+                        <i class="fa-solid fa-satellite-dish animate-pulse"></i>
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <h3 class="text-lg font-extrabold text-white">Connecting to Nearby Captains...</h3>
+                    <p id="searchStatusSubtext" class="text-xs text-slate-400">Broadcasting your request to 6 closest drivers near Pickup</p>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div id="searchProgressBar" class="bg-gradient-to-r from-yellow-400 to-emerald-400 h-full w-1/4 transition-all duration-300 rounded-full"></div>
+                </div>
+
+                <button onclick="cancelBooking()" class="px-5 py-2.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white text-xs font-bold transition">
+                    Cancel Request
+                </button>
+            </div>
+
+            <!-- STAGE C: DRIVER ASSIGNED & LIVE TRIP TRACKING -->
+            <div id="stage-active" class="hidden flex-col p-4 sm:p-5 space-y-4 overflow-y-auto">
+                <!-- Live Status Header -->
+                <div class="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5">
+                    <div>
+                        <span id="liveTripPhaseBadge" class="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-yellow-400/20 text-yellow-400">
+                            Captain En Route
+                        </span>
+                        <h3 id="liveTripHeadline" class="text-base font-extrabold text-white mt-1">Arriving in 2 mins</h3>
+                    </div>
+                    <!-- Security OTP Box -->
+                    <div class="text-right">
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Start PIN</span>
+                        <div id="rideOtpDisplay" class="font-mono text-base font-extrabold tracking-widest bg-slate-800 border border-yellow-400/40 text-yellow-400 px-2.5 py-1 rounded-xl mt-0.5">
+                            4829
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Trip Progress Bar -->
+                <div class="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-3 space-y-2">
+                    <div class="flex justify-between text-[11px] font-semibold">
+                        <span id="tripProgressLabel" class="text-emerald-400">Heading to Pickup</span>
+                        <span id="tripProgressPercent" class="font-mono text-slate-300">0%</span>
+                    </div>
+                    <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div id="liveTripProgressBar" class="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-yellow-400 rounded-full transition-all duration-200" style="width: 5%"></div>
+                    </div>
+                </div>
+
+                <!-- Driver & Vehicle Card -->
+                <div class="glass-card rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <div id="driverAvatar" class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md">
+                                RK
+                            </div>
+                            <span class="absolute -bottom-1 -right-1 bg-slate-900 text-yellow-400 text-[10px] font-bold px-1.5 py-0.2 rounded-md border border-slate-700 flex items-center gap-0.5">
+                                <i class="fa-solid fa-star text-[8px]"></i> <span id="driverRating">4.9</span>
+                            </span>
+                        </div>
+                        <div>
+                            <h4 id="driverName" class="text-sm font-bold text-white">Rohan Kulkarni</h4>
+                            <p id="driverVehicleModel" class="text-xs text-slate-400">TVS Apache RTR 160 • Yellow</p>
+                            <span id="driverPlate" class="inline-block mt-1 font-mono text-[11px] font-bold bg-slate-950 text-slate-200 px-2 py-0.5 rounded border border-slate-700">
+                                KA 25 EQ 7412
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Quick Action Buttons -->
+                    <div class="flex flex-col gap-1.5">
+                        <button onclick="showToast('Calling Captain Rohan via masked VoIP...', 'info')" class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 flex items-center justify-center transition" title="Call Captain">
+                            <i class="fa-solid fa-phone text-xs"></i>
+                        </button>
+                        <button onclick="showToast('SOS Emergency alert ready & live GPS shared.', 'warning')" class="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center transition" title="Safety SOS">
+                            <i class="fa-solid fa-shield-halved text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Route Summary Mini -->
+                <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 space-y-2 text-xs">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span id="activePickupText" class="text-slate-300 truncate">Hubballi Railway Junction</span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2 h-2 rounded-sm bg-yellow-400"></span>
+                        <span id="activeDropText" class="text-slate-300 truncate">Unkal Lake Sunset Point</span>
+                    </div>
+                    <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+                        <span class="text-slate-400">Payable via <strong id="activePaymentText" class="text-slate-200">VeloWallet</strong></span>
+                        <span class="font-mono font-extrabold text-sm text-yellow-400">₹<span id="activeFareText">45</span></span>
+                    </div>
+                </div>
+
+                <!-- Simulation Controls (Cancel or Fast-Forward) -->
+                <div class="flex items-center gap-2 pt-1">
+                    <button onclick="cancelBooking()" id="cancelActiveBtn" class="flex-1 py-2.5 rounded-xl border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 text-xs font-bold transition">
+                        Cancel Ride
+                    </button>
+                    <button onclick="fastForwardTrip()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-bold transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-forward-fast"></i> Speed Up Sim
+                    </button>
+                </div>
+            </div>
+
+            <!-- STAGE D: RIDE COMPLETED & RECEIPT -->
+            <div id="stage-completed" class="hidden flex-col p-5 space-y-4 overflow-y-auto text-center">
+                <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-2xl mx-auto shadow-lg shadow-emerald-500/20">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-extrabold text-white">You've Arrived!</h3>
+                    <p class="text-xs text-slate-400">Hope you enjoyed a smooth ride with <span id="completedDriverName" class="text-slate-200 font-semibold">Rohan</span></p>
+                </div>
+
+                <!-- Fare Receipt Breakdown -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 text-left space-y-2 text-xs">
+                    <div class="flex justify-between text-slate-400">
+                        <span>Base & Distance Fare</span>
+                        <span class="font-mono text-slate-200">₹<span id="receiptBaseFare">55</span></span>
+                    </div>
+                    <div class="flex justify-between text-emerald-400">
+                        <span>Promo Discount</span>
+                        <span class="font-mono">-₹<span id="receiptDiscount">10</span></span>
+                    </div>
+                    <div class="flex justify-between text-slate-400">
+                        <span>Taxes & Platform Fee</span>
+                        <span class="font-mono text-slate-200">₹0</span>
+                    </div>
+                    <div class="h-px bg-slate-800 my-1"></div>
+                    <div class="flex justify-between items-center text-sm font-extrabold text-white">
+                        <span>Total Paid (<span id="receiptMethod">VeloWallet</span>)</span>
+                        <span class="font-mono text-lg text-yellow-400">₹<span id="receiptTotalFare">45</span></span>
+                    </div>
+                </div>
+
+                <!-- Star Rating Widget -->
+                <div class="space-y-1.5">
+                    <p class="text-xs font-semibold text-slate-300">Rate your Captain</p>
+                    <div id="ratingStars" class="flex items-center justify-center gap-2 text-xl text-yellow-400">
+                        <button onclick="setDriverRating(1)" class="hover:scale-125 transition"><i class="fa-solid fa-star"></i></button>
+                        <button onclick="setDriverRating(2)" class="hover:scale-125 transition"><i class="fa-solid fa-star"></i></button>
+                        <button onclick="setDriverRating(3)" class="hover:scale-125 transition"><i class="fa-solid fa-star"></i></button>
+                        <button onclick="setDriverRating(4)" class="hover:scale-125 transition"><i class="fa-solid fa-star"></i></button>
+                        <button onclick="setDriverRating(5)" class="hover:scale-125 transition"><i class="fa-solid fa-star"></i></button>
+                    </div>
+                </div>
+
+                <button onclick="resetToBooking()" class="btn-primary-glow w-full py-3.5 rounded-2xl text-slate-950 font-extrabold text-sm">
+                    Book Another Ride
+                </button>
+            </div>
+        </section>
+
+        <!-- VIEW 2: RIDE HISTORY PANEL -->
+        <section id="view-history" class="hidden glass-panel rounded-3xl w-full md:w-[440px] max-h-[78vh] flex flex-col overflow-hidden pointer-events-auto p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-extrabold text-white">Your Ride History</h2>
+                    <p class="text-xs text-slate-400">Past trips & instant receipts</p>
+                </div>
+                <button onclick="switchTab('book')" class="text-xs font-bold text-yellow-400 hover:underline">
+                    + New Ride
+                </button>
+            </div>
+            <div id="historyListContainer" class="flex-1 overflow-y-auto space-y-3 pr-1">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- VIEW 3: WALLET & PROFILE PANEL -->
+        <section id="view-wallet" class="hidden glass-panel rounded-3xl w-full md:w-[440px] max-h-[78vh] flex flex-col overflow-hidden pointer-events-auto p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-extrabold text-white">VeloWallet & Pass</h2>
+                <span class="text-xs font-mono px-2.5 py-1 rounded-full bg-yellow-400/20 text-yellow-400 border border-yellow-400/30">
+                    GOLD MEMBER
+                </span>
+            </div>
+
+            <!-- Balance Card -->
+            <div class="rounded-2xl p-5 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-yellow-400/30 relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-yellow-400/10 blur-xl"></div>
+                <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Available VeloCash</p>
+                <div class="flex items-baseline gap-2 mt-1">
+                    <span class="text-3xl font-extrabold font-mono text-white">₹<span id="walletCardBalance">850</span>.00</span>
+                    <span class="text-xs text-emerald-400 font-semibold">+5% Cashback active</span>
+                </div>
+
+                <!-- Quick Top-up Buttons -->
+                <div class="mt-4 pt-3 border-t border-slate-800 flex items-center gap-2">
+                    <button onclick="topUpWallet(200)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-yellow-400 hover:text-slate-950 text-xs font-bold transition">+ ₹200</button>
+                    <button onclick="topUpWallet(500)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-yellow-400 hover:text-slate-950 text-xs font-bold transition">+ ₹500</button>
+                    <button onclick="topUpWallet(1000)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-yellow-400 hover:text-slate-950 text-xs font-bold transition">+ ₹1000</button>
+                </div>
+            </div>
+
+            <!-- Available Promo Coupons -->
+            <div class="space-y-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Active Offers (Click to Copy & Use)</h3>
+                <div onclick="quickApplyPromo('RIDE50')" class="glass-card rounded-2xl p-3 flex items-center justify-between cursor-pointer">
+                    <div>
+                        <span class="font-mono text-xs font-extrabold text-yellow-400 bg-yellow-400/15 px-2 py-0.5 rounded">RIDE50</span>
+                        <p class="text-xs text-slate-300 mt-1">Flat ₹50 OFF on any Cab or Auto ride</p>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i>
+                </div>
+                <div onclick="quickApplyPromo('FIRST100')" class="glass-card rounded-2xl p-3 flex items-center justify-between cursor-pointer">
+                    <div>
+                        <span class="font-mono text-xs font-extrabold text-emerald-400 bg-emerald-400/15 px-2 py-0.5 rounded">FIRST100</span>
+                        <p class="text-xs text-slate-300 mt-1">50% OFF up to ₹100 on Prime & XL rides</p>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FLOATING TOAST NOTIFICATIONS -->
+    <div id="toastContainer" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 w-full max-w-sm px-4"></div>
+
+    <script>
+        /**
+         * ============================================================================
+         * VELORIDE — INTERACTIVE RIDE BOOKING ENGINE & CITY VECTOR MAP SIMULATION
+         * ============================================================================
+         */
+
+        // 1. CITY LANDMARKS DATA (Hubballi Smart Grid Coordinates in normalized 0..1000 space)
+        const LANDMARKS = [
+            { id: 'junction', name: 'Hubballi Railway Junction', area: 'Station Road', x: 480, y: 560, icon: '🚉' },
+            { id: 'unkal', name: 'Unkal Lake Sunset Point', area: 'Vidyanagar', x: 310, y: 270, icon: '🌊' },
+            { id: 'airport', name: 'Hubballi Airport (HBX)', area: 'Gokul Road', x: 160, y: 520, icon: '✈️' },
+            { id: 'itpark', name: 'IT Park & Tech Hub', area: 'Navanagar', x: 240, y: 170, icon: '💻' },
+            { id: 'mall', name: 'Urban Oasis Mall', area: 'Gokul Road', x: 320, y: 460, icon: '🛍️' },
+            { id: 'bvb', name: 'KLE Tech University (BVB)', area: 'Vidyanagar', x: 410, y: 360, icon: '🎓' },
+            { id: 'chennamma', name: 'Rani Chennamma Circle', area: 'City Center', x: 540, y: 470, icon: '🏛️' },
+            { id: 'kims', name: 'KIMS Hospital Campus', area: 'Vidyanagar', x: 490, y: 340, icon: '🏥' },
+            { id: 'tolankere', name: 'Tolankere Eco Park', area: 'Akshay Park', x: 270, y: 380, icon: '🌳' },
+            { id: 'keswapur', name: 'Keshwapur Plaza', area: 'East Hubballi', x: 690, y: 490, icon: '🏢' }
+        ];
+
+        // 2. VEHICLE TIERS CONFIGURATION WITH CUSTOM SVG ILLUSTRATIONS
+        const VEHICLE_TIERS = [
+            {
+                id: 'bike',
+                name: 'Velo Bike',
+                tagline: 'Beat traffic • Fastest solo commute',
+                capacity: 1,
+                baseFare: 18,
+                perKm: 6.5,
+                etaOffset: 2,
+                color: '#FACC15',
+                badge: 'FASTEST',
+                svg: `<svg viewBox="0 0 64 36" class="w-14 h-9">
+                        <circle cx="14" cy="26" r="7" fill="none" stroke="#FACC15" stroke-width="2.5"/>
+                        <circle cx="50" cy="26" r="7" fill="none" stroke="#FACC15" stroke-width="2.5"/>
+                        <path d="M14 26 L26 14 L38 14 L50 26 M26 14 L22 8 L29 8 M38 14 L42 9 L47 9" stroke="#F8FAFC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                        <rect x="24" y="11" width="13" height="4" rx="2" fill="#FACC15"/>
+                      </svg>`
+            },
+            {
+                id: 'auto',
+                name: 'Velo Auto',
+                tagline: 'Doorstep pickup • No haggling',
+                capacity: 3,
+                baseFare: 28,
+                perKm: 10.5,
+                etaOffset: 3,
+                color: '#10B981',
+                badge: 'POPULAR',
+                svg: `<svg viewBox="0 0 64 36" class="w-14 h-9">
+                        <path d="M14 25 L14 13 C14 9 18 7 24 7 L40 7 C46 7 50 11 51 18 L52 25 Z" fill="#10B981" fill-opacity="0.25" stroke="#10B981" stroke-width="2"/>
+                        <path d="M18 11 L32 11 L32 19 L18 19 Z" fill="#0F172A"/>
+                        <circle cx="18" cy="27" r="5.5" fill="#0F172A" stroke="#FACC15" stroke-width="2"/>
+                        <circle cx="46" cy="27" r="5.5" fill="#0F172A" stroke="#FACC15" stroke-width="2"/>
+                      </svg>`
+            },
+            {
+                id: 'mini',
+                name: 'Mini Hatch',
+                tagline: 'Comfy AC hatchbacks for daily rides',
+                capacity: 4,
+                baseFare: 45,
+                perKm: 14.0,
+                etaOffset: 4,
+                color: '#06B6D4',
+                badge: null,
+                svg: `<svg viewBox="0 0 64 36" class="w-14 h-9">
+                        <path d="M10 24 L13 16 L22 10 L42 10 L51 16 L55 24 Z" fill="#06B6D4" fill-opacity="0.25" stroke="#06B6D4" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M23 12 L40 12 L46 16 L18 16 Z" fill="#0F172A"/>
+                        <circle cx="18" cy="26" r="5.5" fill="#0F172A" stroke="#E2E8F0" stroke-width="2"/>
+                        <circle cx="46" cy="26" r="5.5" fill="#0F172A" stroke="#E2E8F0" stroke-width="2"/>
+                      </svg>`
+            },
+            {
+                id: 'prime',
+                name: 'Prime Sedan',
+                tagline: 'Top-rated captains • Extra legroom',
+                capacity: 4,
+                baseFare: 65,
+                perKm: 17.5,
+                etaOffset: 5,
+                color: '#A855F7',
+                badge: 'TOP RATED',
+                svg: `<svg viewBox="0 0 64 36" class="w-14 h-9">
+                        <path d="M7 24 L11 16 L21 9 L43 9 L53 16 L58 24 Z" fill="#A855F7" fill-opacity="0.28" stroke="#C084FC" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M22 11 L41 11 L48 16 L16 16 Z" fill="#0F172A"/>
+                        <circle cx="17" cy="26" r="5.5" fill="#0F172A" stroke="#C084FC" stroke-width="2"/>
+                        <circle cx="47" cy="26" r="5.5" fill="#0F172A" stroke="#C084FC" stroke-width="2"/>
+                      </svg>`
+            },
+            {
+                id: 'xl',
+                name: 'Prime XL SUV',
+                tagline: '6-Seater SUVs for group & airport trips',
+                capacity: 6,
+                baseFare: 95,
+                perKm: 23.0,
+                etaOffset: 6,
+                color: '#F97316',
+                badge: '6 SEATS',
+                svg: `<svg viewBox="0 0 64 36" class="w-14 h-9">
+                        <path d="M8 24 L10 11 C10 9 12 8 15 8 L46 8 C49 8 51 10 53 15 L56 24 Z" fill="#F97316" fill-opacity="0.28" stroke="#FB923C" stroke-width="2" stroke-linejoin="round"/>
+                        <rect x="15" y="10" width="14" height="6" rx="1" fill="#0F172A"/>
+                        <rect x="32" y="10" width="14" height="6" rx="1" fill="#0F172A"/>
+                        <circle cx="17" cy="26" r="6" fill="#0F172A" stroke="#FB923C" stroke-width="2"/>
+                        <circle cx="47" cy="26" r="6" fill="#0F172A" stroke="#FB923C" stroke-width="2"/>
+                      </svg>`
+            }
+        ];
+
+        // 3. MOCK CAPTAIN DATABASE
+        const CAPTAINS = [
+            { name: 'Rohan Kulkarni', initials: 'RK', rating: '4.9', plate: 'KA 25 EQ 7412', models: { bike: 'TVS Apache RTR 160', auto: 'Bajaj RE Compact CNG', mini: 'Maruti Swift VXI', prime: 'Honda City ZX', xl: 'Toyota Innova Crysta' } },
+            { name: 'Siddharth Patil', initials: 'SP', rating: '4.8', plate: 'KA 25 HD 3901', models: { bike: 'Hero Xpulse 200', auto: 'Piaggio Ape City', mini: 'Hyundai Grand i10', prime: 'Maruti Dzire ZXI', xl: 'Mahindra Marazzo' } },
+            { name: 'Arjun Desai', initials: 'AD', rating: '4.95', plate: 'KA 25 AB 9088', models: { bike: 'Bajaj Pulsar N160', auto: 'TVS King Deluxe', mini: 'Tata Tiago XZ', prime: 'Hyundai Aura SX', xl: 'Kia Carens Prestige' } },
+            { name: 'Manjunath Hegde', initials: 'MH', rating: '4.85', plate: 'KA 25 MN 5120', models: { bike: 'Yamaha FZ-S V4', auto: 'Bajaj Maxima Z', mini: 'Maruti Baleno Delta', prime: 'Skoda Slavia', xl: 'Maruti Ertiga ZXI' } }
+        ];
+
+        // 4. GLOBAL APPLICATION STATE
+        const state = {
+            pickupId: 'junction',
+            dropId: 'unkal',
+            selectedVehicleId: 'bike',
+            surgeMultiplier: 1.0,
+            promoCode: null,
+            discountAmount: 0,
+            walletBalance: 850,
+            bookingStage: 'select', // 'select' | 'searching' | 'active' | 'completed'
+            activeTrip: null,
+            tripHistory: [
+                {
+                    id: 'VR-8841',
+                    date: 'Yesterday, 6:40 PM',
+                    pickup: 'IT Park & Tech Hub',
+                    drop: 'Urban Oasis Mall',
+                    vehicle: 'Velo Auto',
+                    fare: 68,
+                    status: 'Completed',
+                    driver: 'Siddharth Patil'
+                },
+                {
+                    id: 'VR-8792',
+                    date: '14 Nov, 9:15 AM',
+                    pickup: 'Hubballi Railway Junction',
+                    drop: 'Hubballi Airport (HBX)',
+                    vehicle: 'Prime Sedan',
+                    fare: 195,
+                    status: 'Completed',
+                    driver: 'Arjun Desai'
+                }
+            ],
+            // Map Camera & Simulation State
+            map: {
+                zoom: 1.0,
+                offsetX: 0,
+                offsetY: 0,
+                isDragging: false,
+                dragStartX: 0,
+                dragStartY: 0,
+                ambientVehicles: [],
+                routePoints: [],
+                assignedVehiclePos: null,
+                assignedProgress: 0,
+                simSpeedMultiplier: 1
+            }
+        };
+
+        let searchTimer = null;
+        let tripInterval = null;
+
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
+        window.onload = function () {
+            populateLocationDropdowns();
+            initCityCanvas();
+            initAmbientTraffic();
+            recalculateRouteAndFares();
+            renderHistoryList();
+            requestAnimationFrame(animateCityMap);
+        };
+
+        // ============================================================================
+        // LOCATION, ROUTING & DYNAMIC PRICING LOGIC
+        // ============================================================================
+        function populateLocationDropdowns() {
+            const pickupSel = document.getElementById('pickupSelect');
+            const dropSel = document.getElementById('dropSelect');
+
+            pickupSel.innerHTML = '';
+            dropSel.innerHTML = '';
+
+            LANDMARKS.forEach(loc => {
+                const opt1 = new Option(`${loc.icon} ${loc.name}`, loc.id);
+                const opt2 = new Option(`${loc.icon} ${loc.name}`, loc.id);
+                pickupSel.add(opt1);
+                dropSel.add(opt2);
+            });
+
+            pickupSel.value = state.pickupId;
+            dropSel.value = state.dropId;
+        }
+
+        function handleLocationChange() {
+            const pVal = document.getElementById('pickupSelect').value;
+            const dVal = document.getElementById('dropSelect').value;
+
+            if (pVal === dVal) {
+                showToast('Pickup and Drop-off cannot be the same landmark!', 'warning');
+                // Pick another distinct landmark automatically
+                const fallback = LANDMARKS.find(l => l.id !== pVal);
+                document.getElementById('dropSelect').value = fallback.id;
+            }
+
+            state.pickupId = document.getElementById('pickupSelect').value;
+            state.dropId = document.getElementById('dropSelect').value;
+            recalculateRouteAndFares();
+        }
+
+        function swapLocations() {
+            const temp = state.pickupId;
+            state.pickupId = state.dropId;
+            state.dropId = temp;
+            document.getElementById('pickupSelect').value = state.pickupId;
+            document.getElementById('dropSelect').value = state.dropId;
+            recalculateRouteAndFares();
+            showToast('Pickup & Destination swapped', 'info');
+        }
+
+        function getLandmark(id) {
+            return LANDMARKS.find(l => l.id === id) || LANDMARKS[0];
+        }
+
+        function calculateDistanceKm(p1, p2) {
+            // Manhattan + Euclidean hybrid scaled to realistic Hubballi city km
+            const dx = Math.abs(p1.x - p2.x);
+            const dy = Math.abs(p1.y - p2.y);
+            const euclidean = Math.hypot(dx, dy);
+            const km = Math.max(1.4, (euclidean / 48) * 1.18);
+            return Number(km.toFixed(1));
+        }
+
+        function buildCurvedCityRoute(p1, p2) {
+            // Creates an urban road-grid-aligned multi-point path between pickup and drop
+            const midX = (p1.x + p2.x) / 2 + (p2.y - p1.y) * 0.14;
+            const midY = (p1.y + p2.y) / 2 - (p2.x - p1.x) * 0.14;
+
+            const points = [];
+            const steps = 60;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                // Quadratic Bezier interpolation
+                const x = (1 - t) * (1 - t) * p1.x + 2 * (1 - t) * t * midX + t * t * p2.x;
+                const y = (1 - t) * (1 - t) * p1.y + 2 * (1 - t) * t * midY + t * t * p2.y;
+                points.push({ x, y });
+            }
+            return points;
+        }
+
+        function recalculateRouteAndFares() {
+            const pickup = getLandmark(state.pickupId);
+            const drop = getLandmark(state.dropId);
+
+            const distKm = calculateDistanceKm(pickup, drop);
+            const durationMins = Math.max(5, Math.round(distKm * 2.4 + (state.surgeMultiplier > 1 ? 4 : 0)));
+
+            document.getElementById('routeDistance').textContent = `${distKm} km`;
+            document.getElementById('routeDuration').textContent = `${durationMins} mins`;
+
+            const trafficBadge = document.getElementById('trafficStatusBadge');
+            if (state.surgeMultiplier > 1) {
+                trafficBadge.textContent = 'Peak Hour • 1.3x Surge';
+                trafficBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400';
+            } else {
+                trafficBadge.textContent = 'Smooth Traffic';
+                trafficBadge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400';
+            }
+
+            state.map.routePoints = buildCurvedCityRoute(pickup, drop);
+            renderVehicleCards(distKm);
+        }
+
+        function computeFareForTier(tier, distKm) {
+            const raw = (tier.baseFare + tier.perKm * distKm) * state.surgeMultiplier;
+            return Math.round(raw);
+        }
+
+        function renderVehicleCards(distKm) {
+            const container = document.getElementById('vehicleList');
+            container.innerHTML = '';
+
+            VEHICLE_TIERS.forEach(tier => {
+                const isSelected = tier.id === state.selectedVehicleId;
+                const baseTotal = computeFareForTier(tier, distKm);
+                const eta = tier.etaOffset + (state.surgeMultiplier > 1 ? 2 : 0);
+
+                // Compute discount if selected
+                let discount = 0;
+                if (state.promoCode === 'RIDE50') discount = Math.min(50, Math.round(baseTotal * 0.4));
+                if (state.promoCode === 'FIRST100') discount = Math.min(100, Math.round(baseTotal * 0.5));
+
+                const finalPrice = Math.max(15, baseTotal - discount);
+
+                if (isSelected) {
+                    state.discountAmount = discount;
+                    document.getElementById('ctaVehicleName').textContent = tier.name;
+                    document.getElementById('ctaFinalFare').textContent = finalPrice;
+                }
+
+                const card = document.createElement('div');
+                card.onclick = () => {
+                    state.selectedVehicleId = tier.id;
+                    renderVehicleCards(distKm);
+                };
+                card.className = `glass-card rounded-2xl p-3 flex items-center justify-between cursor-pointer ${isSelected ? 'selected' : ''}`;
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="shrink-0 bg-slate-900/80 rounded-xl p-1.5 border border-slate-800">
+                            ${tier.svg}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-sm font-bold text-white truncate">${tier.name}</h4>
+                                <span class="text-[10px] font-mono text-slate-400 flex items-center gap-0.5">
+                                    <i class="fa-solid fa-user text-[9px]"></i> ${tier.capacity}
+                                </span>
+                                ${tier.badge ? `<span class="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-yellow-400/20 text-yellow-400">${tier.badge}</span>` : ''}
+                            </div>
+                            <p class="text-[11px] text-slate-400 truncate">${tier.tagline}</p>
+                            <span class="text-[11px] font-semibold text-emerald-400">${eta} mins away</span>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0 pl-2">
+                        <div class="font-mono text-base font-extrabold text-white">₹${finalPrice}</div>
+                        ${discount > 0 ? `<div class="font-mono text-[11px] text-slate-500 line-through">₹${baseTotal}</div>` : `<div class="text-[10px] text-slate-500">incl. GST</div>`}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // ============================================================================
+        // PROMO CODES & SURGE SIMULATION
+        // ============================================================================
+        function applyPromoCode() {
+            const input = document.getElementById('promoInput');
+            const code = input.value.trim().toUpperCase();
+
+            if (!code) {
+                showToast('Enter RIDE50 or FIRST100 to unlock instant savings!', 'warning');
+                return;
+            }
+
+            if (code === 'RIDE50' || code === 'FIRST100') {
+                state.promoCode = code;
+                const banner = document.getElementById('promoAppliedBanner');
+                banner.classList.remove('hidden');
+                banner.classList.add('flex');
+                document.getElementById('promoBannerText').textContent =
+                    code === 'RIDE50' ? 'Promo RIDE50 applied (Up to ₹50 OFF)' : 'Promo FIRST100 applied (50% OFF up to ₹100)';
+                recalculateRouteAndFares();
+                showToast(`Coupon ${code} applied successfully!`, 'success');
+            } else {
+                showToast('Invalid coupon. Try RIDE50 or FIRST100', 'error');
+            }
+        }
+
+        function quickApplyPromo(code) {
+            document.getElementById('promoInput').value = code;
+            switchTab('book');
+            applyPromoCode();
+        }
+
+        function removePromoCode() {
+            state.promoCode = null;
+            state.discountAmount = 0;
+            document.getElementById('promoInput').value = '';
+            const banner = document.getElementById('promoAppliedBanner');
+            banner.classList.add('hidden');
+            banner.classList.remove('flex');
+            recalculateRouteAndFares();
+        }
+
+        function toggleSurge() {
+            const btn = document.getElementById('surgeToggleBtn');
+            if (state.surgeMultiplier === 1.0) {
+                state.surgeMultiplier = 1.3;
+                btn.textContent = '1.3x Peak';
+                btn.className = 'text-[11px] font-mono font-bold px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 transition';
+                showToast('Peak hour demand simulated (1.3x fares)', 'warning');
+            } else {
+                state.surgeMultiplier = 1.0;
+                btn.textContent = '1.0x Normal';
+                btn.className = 'text-[11px] font-mono font-bold px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:border-yellow-400 transition';
+                showToast('Normal pricing restored (1.0x)', 'info');
+            }
+            recalculateRouteAndFares();
+        }
+
+        // ============================================================================
+        // BOOKING LIFECYCLE WORKFLOW (SEARCH -> ASSIGN -> EN ROUTE -> COMPLETED)
+        // ============================================================================
+        function setBookingStage(stage) {
+            state.bookingStage = stage;
+            ['select', 'searching', 'active', 'completed'].forEach(s => {
+                const el = document.getElementById(`stage-${s}`);
+                if (s === stage) {
+                    el.classList.remove('hidden');
+                    el.classList.add('flex');
+                } else {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                }
+            });
+        }
+
+        function startBookingSearch() {
+            const pickup = getLandmark(state.pickupId);
+            const drop = getLandmark(state.dropId);
+            const tier = VEHICLE_TIERS.find(v => v.id === state.selectedVehicleId);
+            const distKm = calculateDistanceKm(pickup, drop);
+            const baseTotal = computeFareForTier(tier, distKm);
+            const finalFare = Math.max(15, baseTotal - state.discountAmount);
+            const paymentMethod = document.getElementById('paymentMethodSelect').value;
+
+            if (paymentMethod === 'VeloWallet' && state.walletBalance < finalFare) {
+                showToast('Insufficient VeloWallet balance! Please top up or choose UPI/Cash.', 'error');
+                switchTab('wallet');
+                return;
+            }
+
+            setBookingStage('searching');
+            const bar = document.getElementById('searchProgressBar');
+            const subtext = document.getElementById('searchStatusSubtext');
+            bar.style.width = '20%';
+            subtext.textContent = `Pinging nearby ${tier.name} captains around ${pickup.name}...`;
+
+            let step = 0;
+            searchTimer = setInterval(() => {
+                step++;
+                if (step === 1) {
+                    bar.style.width = '55%';
+                    subtext.textContent = '3 Captains viewing your trip details...';
+                } else if (step === 2) {
+                    bar.style.width = '88%';
+                    subtext.textContent = 'Confirming captain & generating secure trip OTP...';
+                } else if (step >= 3) {
+                    clearInterval(searchTimer);
+                    assignCaptainAndStartTrip(pickup, drop, tier, baseTotal, finalFare, paymentMethod);
+                }
+            }, 850);
+        }
+
+        function assignCaptainAndStartTrip(pickup, drop, tier, baseTotal, finalFare, paymentMethod) {
+            const captain = CAPTAINS[Math.floor(Math.random() * CAPTAINS.length)];
+            const otp = Math.floor(1000 + Math.random() * 9000);
+
+            state.activeTrip = {
+                id: 'VR-' + Math.floor(1000 + Math.random() * 9000),
+                pickup,
+                drop,
+                tier,
+                captain,
+                otp,
+                baseTotal,
+                discount: state.discountAmount,
+                finalFare,
+                paymentMethod,
+                phase: 'arriving', // 'arriving' -> 'intransit'
+                progress: 0
+            };
+
+            // Populate Active UI
+            document.getElementById('driverAvatar').textContent = captain.initials;
+            document.getElementById('driverName').textContent = captain.name;
+            document.getElementById('driverRating').textContent = captain.rating;
+            document.getElementById('driverVehicleModel').textContent = `${captain.models[tier.id]} • ${tier.name}`;
+            document.getElementById('driverPlate').textContent = captain.plate;
+            document.getElementById('rideOtpDisplay').textContent = otp;
+
+            document.getElementById('activePickupText').textContent = pickup.name;
+            document.getElementById('activeDropText').textContent = drop.name;
+            document.getElementById('activePaymentText').textContent = paymentMethod;
+            document.getElementById('activeFareText').textContent = finalFare;
+
+            state.map.simSpeedMultiplier = 1;
+            state.map.assignedProgress = 0;
+
+            setBookingStage('active');
+            showToast(`Captain ${captain.name} assigned! Share PIN ${otp} at pickup.`, 'success');
+
+            startLiveTripSimulation();
+        }
+
+        function startLiveTripSimulation() {
+            if (tripInterval) clearInterval(tripInterval);
+
+            const phaseBadge = document.getElementById('liveTripPhaseBadge');
+            const headline = document.getElementById('liveTripHeadline');
+            const progLabel = document.getElementById('tripProgressLabel');
+            const progPercent = document.getElementById('tripProgressPercent');
+            const progBar = document.getElementById('liveTripProgressBar');
+            const cancelBtn = document.getElementById('cancelActiveBtn');
+
+            tripInterval = setInterval(() => {
+                if (!state.activeTrip) return;
+
+                const stepIncrement = 2.5 * state.map.simSpeedMultiplier;
+                state.activeTrip.progress = Math.min(100, state.activeTrip.progress + stepIncrement);
+                const p = Math.round(state.activeTrip.progress);
+
+                if (state.activeTrip.phase === 'arriving') {
+                    phaseBadge.textContent = 'Captain En Route to Pickup';
+                    phaseBadge.className = 'text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-yellow-400/20 text-yellow-400';
+                    const minsLeft = Math.max(1, Math.ceil((100 - p) / 35));
+                    headline.textContent = `Arriving at pickup in ${minsLeft} min${minsLeft > 1 ? 's' : ''}`;
+                    progLabel.textContent = 'Approaching Pickup Point';
+                    progPercent.textContent = `${p}%`;
+                    progBar.style.width = `${p}%`;
+
+                    // Move vehicle from nearby point toward Pickup
+                    const pickup = state.activeTrip.pickup;
+                    const startX = pickup.x - 85;
+                    const startY = pickup.y + 65;
+                    const t = p / 100;
+                    state.map.assignedVehiclePos = {
+                        x: startX + (pickup.x - startX) * t,
+                        y: startY + (pickup.y - startY) * t,
+                        angle: Math.atan2(pickup.y - startY, pickup.x - startX)
+                    };
+
+                    if (p >= 100) {
+                        // Transition to Trip in Progress!
+                        state.activeTrip.phase = 'intransit';
+                        state.activeTrip.progress = 0;
+                        cancelBtn.classList.add('hidden');
+                        showToast(`PIN ${state.activeTrip.otp} verified! Trip started towards ${state.activeTrip.drop.name}.`, 'success');
+                    }
+                } else if (state.activeTrip.phase === 'intransit') {
+                    phaseBadge.textContent = 'On Trip • Live GPS';
+                    phaseBadge.className = 'text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400';
+                    const minsLeft = Math.max(1, Math.ceil((100 - p) / 10));
+                    headline.textContent = `${minsLeft} min${minsLeft > 1 ? 's' : ''} to Destination`;
+                    progLabel.textContent = `En route to ${state.activeTrip.drop.name}`;
+                    progPercent.textContent = `${p}%`;
+                    progBar.style.width = `${p}%`;
+
+                    // Move vehicle along the Bezier routePoints
+                    const pts = state.map.routePoints;
+                    if (pts.length > 1) {
+                        const idx = Math.min(pts.length - 1, Math.floor((p / 100) * (pts.length - 1)));
+                        const nextIdx = Math.min(pts.length - 1, idx + 1);
+                        const curr = pts[idx];
+                        const next = pts[nextIdx];
+                        state.map.assignedVehiclePos = {
+                            x: curr.x,
+                            y: curr.y,
+                            angle: Math.atan2(next.y - curr.y, next.x - curr.x)
+                        };
+                    }
+
+                    if (p >= 100) {
+                        clearInterval(tripInterval);
+                        completeCurrentTrip();
+                    }
+                }
+            }, 220);
+        }
+
+        function fastForwardTrip() {
+            state.map.simSpeedMultiplier = 6;
+            showToast('Fast-forwarding live trip simulation...', 'info');
+        }
+
+        function cancelBooking() {
+            if (searchTimer) clearInterval(searchTimer);
+            if (tripInterval) clearInterval(tripInterval);
+            state.activeTrip = null;
+            state.map.assignedVehiclePos = null;
+            document.getElementById('cancelActiveBtn').classList.remove('hidden');
+            setBookingStage('select');
+            showToast('Ride request cancelled.', 'warning');
+        }
+
+        function completeCurrentTrip() {
+            const trip = state.activeTrip;
+            if (!trip) return;
+
+            // Deduct from wallet if VeloWallet was used
+            if (trip.paymentMethod === 'VeloWallet') {
+                state.walletBalance = Math.max(0, state.walletBalance - trip.finalFare);
+                updateWalletDisplays();
+            }
+
+            // Populate Receipt
+            document.getElementById('completedDriverName').textContent = trip.captain.name;
+            document.getElementById('receiptBaseFare').textContent = trip.baseTotal;
+            document.getElementById('receiptDiscount').textContent = trip.discount;
+            document.getElementById('receiptMethod').textContent = trip.paymentMethod;
+            document.getElementById('receiptTotalFare').textContent = trip.finalFare;
+
+            // Add to Trip History
+            state.tripHistory.unshift({
+                id: trip.id,
+                date: 'Just now',
+                pickup: trip.pickup.name,
+                drop: trip.drop.name,
+                vehicle: trip.tier.name,
+                fare: trip.finalFare,
+                status: 'Completed',
+                driver: trip.captain.name
+            });
+            renderHistoryList();
+
+            state.map.assignedVehiclePos = null;
+            setBookingStage('completed');
+            showToast('Destination reached! Receipt generated.', 'success');
+        }
+
+        function setDriverRating(stars) {
+            const btns = document.querySelectorAll('#ratingStars button');
+            btns.forEach((btn, idx) => {
+                btn.className = idx < stars ? 'text-yellow-400 scale-110 transition' : 'text-slate-600 transition';
+            });
+            showToast(`Thank you for rating ${stars} ★!`, 'success');
+        }
+
+        function resetToBooking() {
+            state.activeTrip = null;
+            document.getElementById('cancelActiveBtn').classList.remove('hidden');
+            setBookingStage('select');
+        }
+
+        // ============================================================================
+        // NAVIGATION TABS, HISTORY & WALLET
+        // ============================================================================
+        function switchTab(tabName) {
+            ['book', 'history', 'wallet'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const btn = document.getElementById(`nav-${t}`);
+                if (t === tabName) {
+                    view.classList.remove('hidden');
+                    view.classList.add('flex');
+                    btn.className = 'nav-tab px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 bg-yellow-400 text-slate-950 shadow transition-all';
+                } else {
+                    view.classList.add('hidden');
+                    view.classList.remove('flex');
+                    btn.className = 'nav-tab px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center gap-2 transition-all';
+                }
+            });
+        }
+
+        function renderHistoryList() {
+            const container = document.getElementById('historyListContainer');
+            document.getElementById('tripBadge').textContent = state.tripHistory.length;
+            container.innerHTML = '';
+
+            state.tripHistory.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl p-3.5 space-y-2.5';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-white">${item.vehicle}</span>
+                            <span class="text-[10px] font-mono text-slate-400">${item.id}</span>
+                        </div>
+                        <span class="font-mono text-sm font-extrabold text-yellow-400">₹${item.fare}</span>
+                    </div>
+                    <div class="space-y-1 text-xs">
+                        <div class="flex items-center gap-2 text-slate-300">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                            <span class="truncate">${item.pickup}</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-300">
+                            <span class="w-2 h-2 rounded-sm bg-yellow-400 shrink-0"></span>
+                            <span class="truncate">${item.drop}</span>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>${item.date} • Captain ${item.driver}</span>
+                        <span class="text-emerald-400 font-semibold">${item.status}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function topUpWallet(amount) {
+            state.walletBalance += amount;
+            updateWalletDisplays();
+            showToast(`₹${amount} added to your VeloWallet!`, 'success');
+        }
+
+        function updateWalletDisplays() {
+            document.getElementById('headerWalletBalance').textContent = state.walletBalance;
+            document.getElementById('walletCardBalance').textContent = state.walletBalance;
+            const walletOption = document.querySelector('#paymentMethodSelect option[value="VeloWallet"]');
+            if (walletOption) {
+                walletOption.textContent = `VeloWallet (₹${state.walletBalance})`;
+            }
+        }
+
+        // ============================================================================
+        // HIGH-GRAPHICS HTML5 CANVAS CITY MAP & LIVE TRAFFIC ENGINE
+        // ============================================================================
+        let canvas, ctx;
+
+        function initCityCanvas() {
+            canvas = document.getElementById('cityMapCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // Interactive Pan & Click-to-Select Landmark on Map
+            canvas.addEventListener('mousedown', (e) => {
+                state.map.isDragging = true;
+                state.map.dragStartX = e.clientX - state.map.offsetX;
+                state.map.dragStartY = e.clientY - state.map.offsetY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!state.map.isDragging) return;
+                state.map.offsetX = e.clientX - state.map.dragStartX;
+                state.map.offsetY = e.clientY - state.map.dragStartY;
+            });
+
+            window.addEventListener('mouseup', () => {
+                state.map.isDragging = false;
+            });
+
+            // Click on Map Landmarks to set Drop-off quickly
+            canvas.addEventListener('click', (e) => {
+                if (state.bookingStage !== 'select') return;
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                for (const loc of LANDMARKS) {
+                    const screenPos = worldToScreen(loc.x, loc.y);
+                    const dist = Math.hypot(clickX - screenPos.x, clickY - screenPos.y);
+                    if (dist < 24 && loc.id !== state.pickupId) {
+                        state.dropId = loc.id;
+                        document.getElementById('dropSelect').value = loc.id;
+                        recalculateRouteAndFares();
+                        showToast(`Destination set to ${loc.name}`, 'info');
+                        break;
+                    }
+                }
+            });
+
+            // Touch Support for Mobile Map Dragging
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    state.map.isDragging = true;
+                    state.map.dragStartX = e.touches[0].clientX - state.map.offsetX;
+                    state.map.dragStartY = e.touches[0].clientY - state.map.offsetY;
+                }
+            }, { passive: true });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (!state.map.isDragging || e.touches.length !== 1) return;
+                state.map.offsetX = e.touches[0].clientX - state.map.dragStartX;
+                state.map.offsetY = e.touches[0].clientY - state.map.dragStartY;
+            }, { passive: true });
+
+            canvas.addEventListener('touchend', () => {
+                state.map.isDragging = false;
+            });
+        }
+
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function recenterMap() {
+            state.map.offsetX = 0;
+            state.map.offsetY = 0;
+            state.map.zoom = 1.0;
+        }
+
+        function zoomMap(delta) {
+            state.map.zoom = Math.max(0.75, Math.min(1.65, state.map.zoom + delta));
+        }
+
+        function worldToScreen(wx, wy) {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            // Shift center slightly right on desktop so left booking card doesn't cover route
+            const desktopBiasX = w >= 768 ? 160 : 0;
+            const desktopBiasY = w < 768 ? -140 : 10;
+
+            const scale = Math.min(w, h) / 720 * state.map.zoom;
+            const sx = (wx - 420) * scale + w / 2 + desktopBiasX + state.map.offsetX;
+            const sy = (wy - 390) * scale + h / 2 + desktopBiasY + state.map.offsetY;
+            return { x: sx, y: sy, scale };
+        }
+
+        function initAmbientTraffic() {
+            const types = [
+                { color: '#FACC15', speed: 0.45, label: 'bike' },
+                { color: '#10B981', speed: 0.35, label: 'auto' },
+                { color: '#06B6D4', speed: 0.30, label: 'cab' }
+            ];
+
+            state.map.ambientVehicles = [];
+            for (let i = 0; i < 24; i++) {
+                const startLoc = LANDMARKS[i % LANDMARKS.length];
+                const endLoc = LANDMARKS[(i + 3) % LANDMARKS.length];
+                const vType = types[i % types.length];
+                state.map.ambientVehicles.push({
+                    x: startLoc.x + (Math.random() - 0.5) * 60,
+                    y: startLoc.y + (Math.random() - 0.5) * 60,
+                    targetIdx: (i + 3) % LANDMARKS.length,
+                    speed: vType.speed + Math.random() * 0.15,
+                    color: vType.color,
+                    type: vType.label
+                });
+            }
+        }
+
+        function animateCityMap(timestamp) {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            const pulse = (Math.sin(timestamp * 0.004) + 1) / 2;
+
+            // 1. Deep Futuristic City Base
+            ctx.fillStyle = '#090D16';
+            ctx.fillRect(0, 0, w, h);
+
+            // 2. Subtle Blueprint Coordinate Grid
+            ctx.strokeStyle = 'rgba(30, 41, 59, 0.38)';
+            ctx.lineWidth = 1;
+            const gridSize = 48 * state.map.zoom;
+            const startGridX = (state.map.offsetX % gridSize);
+            const startGridY = (state.map.offsetY % gridSize);
+
+            ctx.beginPath();
+            for (let gx = startGridX; gx < w; gx += gridSize) {
+                ctx.moveTo(gx, 0);
+                ctx.lineTo(gx, h);
+            }
+            for (let gy = startGridY; gy < h; gy += gridSize) {
+                ctx.moveTo(0, gy);
+                ctx.lineTo(w, gy);
+            }
+            ctx.stroke();
+
+            // 3. Draw Unkal Lake & Green Park Zones
+            const lakePos = worldToScreen(295, 265);
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(lakePos.x, lakePos.y, 68 * lakePos.scale, 42 * lakePos.scale, -0.25, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(6, 182, 212, 0.12)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.32)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.restore();
+
+            // 4. Draw Inter-Landmark Smart Road Network
+            ctx.lineCap = 'round';
+            for (let i = 0; i < LANDMARKS.length; i++) {
+                for (let j = i + 1; j < LANDMARKS.length; j++) {
+                    const a = LANDMARKS[i];
+                    const b = LANDMARKS[j];
+                    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                    if (dist < 245) {
+                        const sa = worldToScreen(a.x, a.y);
+                        const sb = worldToScreen(b.x, b.y);
+
+                        // Outer Road Casing
+                        ctx.beginPath();
+                        ctx.moveTo(sa.x, sa.y);
+                        ctx.lineTo(sb.x, sb.y);
+                        ctx.strokeStyle = 'rgba(30, 41, 59, 0.85)';
+                        ctx.lineWidth = 7 * sa.scale;
+                        ctx.stroke();
+
+                        // Inner Centerline
+                        ctx.beginPath();
+                        ctx.moveTo(sa.x, sa.y);
+                        ctx.lineTo(sb.x, sb.y);
+                        ctx.strokeStyle = state.surgeMultiplier > 1 ? 'rgba(245, 158, 11, 0.22)' : 'rgba(71, 85, 105, 0.45)';
+                        ctx.lineWidth = 1.5 * sa.scale;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // 5. Draw Active Dynamic Route Polyline
+            if (state.map.routePoints.length > 1) {
+                ctx.save();
+                // Outer Neon Glow
+                ctx.beginPath();
+                state.map.routePoints.forEach((pt, idx) => {
+                    const sp = worldToScreen(pt.x, pt.y);
+                    if (idx === 0) ctx.moveTo(sp.x, sp.y);
+                    else ctx.lineTo(sp.x, sp.y);
+                });
+                ctx.strokeStyle = 'rgba(250, 204, 21, 0.25)';
+                ctx.lineWidth = 12;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Animated Dashed Core Route
+                ctx.beginPath();
+                state.map.routePoints.forEach((pt, idx) => {
+                    const sp = worldToScreen(pt.x, pt.y);
+                    if (idx === 0) ctx.moveTo(sp.x, sp.y);
+                    else ctx.lineTo(sp.x, sp.y);
+                });
+                const grad = ctx.createLinearGradient(0, 0, w, h);
+                grad.addColorStop(0, '#10B981');
+                grad.addColorStop(0.5, '#06B6D4');
+                grad.addColorStop(1, '#FACC15');
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 4.5;
+                ctx.setLineDash([12, 8]);
+                ctx.lineDashOffset = -timestamp * 0.04;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 6. Update & Draw Live Ambient Vehicles (Bikes, Autos, Cabs)
+            state.map.ambientVehicles.forEach(v => {
+                const target = LANDMARKS[v.targetIdx];
+                const dx = target.x - v.x;
+                const dy = target.y - v.y;
+                const dist = Math.hypot(dx, dy);
+
+                if (dist < 8) {
+                    v.targetIdx = (v.targetIdx + Math.floor(1 + Math.random() * 4)) % LANDMARKS.length;
+                } else {
+                    v.x += (dx / dist) * v.speed;
+                    v.y += (dy / dist) * v.speed;
+                }
+
+                const sp = worldToScreen(v.x, v.y);
+                const angle = Math.atan2(dy, dx);
+
+                ctx.save();
+                ctx.translate(sp.x, sp.y);
+                ctx.rotate(angle);
+
+                // Vehicle Glow
+                ctx.fillStyle = v.color;
+                ctx.shadowColor = v.color;
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.roundRect(-6, -3.2, 12, 6.4, 2.5);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 7. Draw City Landmarks & Pulsing Pickup / Drop-off Pins
+            LANDMARKS.forEach(loc => {
+                const sp = worldToScreen(loc.x, loc.y);
+                const isPickup = loc.id === state.pickupId;
+                const isDrop = loc.id === state.dropId;
+
+                if (isPickup || isDrop) {
+                    const pinColor = isPickup ? '#10B981' : '#FACC15';
+                    // Radar Pulse Ring
+                    ctx.beginPath();
+                    ctx.arc(sp.x, sp.y, 12 + pulse * 16, 0, Math.PI * 2);
+                    ctx.fillStyle = isPickup ? `rgba(16, 185, 129, ${0.35 - pulse * 0.3})` : `rgba(250, 204, 21, ${0.35 - pulse * 0.3})`;
+                    ctx.fill();
+
+                    // Solid Pin Core
+                    ctx.beginPath();
+                    ctx.arc(sp.x, sp.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = pinColor;
+                    ctx.fill();
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = '#090D16';
+                    ctx.stroke();
+
+                    // Floating Label Pill
+                    const label = `${isPickup ? 'PICKUP' : 'DROP'} • ${loc.name}`;
+                    ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
+                    const textW = ctx.measureText(label).width;
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+                    ctx.beginPath();
+                    ctx.roundRect(sp.x - textW / 2 - 8, sp.y - 34, textW + 16, 20, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = pinColor;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#F8FAFC';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(label, sp.x, sp.y - 20);
+                } else {
+                    // Standard Landmark Node
+                    ctx.beginPath();
+                    ctx.arc(sp.x, sp.y, 4.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#64748B';
+                    ctx.fill();
+                    ctx.strokeStyle = '#0F172A';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    if (state.map.zoom >= 0.9) {
+                        ctx.font = '500 10px "Plus Jakarta Sans", sans-serif';
+                        ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(loc.name, sp.x, sp.y + 15);
+                    }
+                }
+            });
+
+            // 8. Draw Assigned Captain Vehicle Moving Live Along Route
+            if (state.map.assignedVehiclePos && state.activeTrip) {
+                const av = state.map.assignedVehiclePos;
+                const sp = worldToScreen(av.x, av.y);
+                const vColor = state.activeTrip.tier.color;
+
+                ctx.save();
+                ctx.translate(sp.x, sp.y);
+
+                // Outer Beacon Ring
+                ctx.beginPath();
+                ctx.arc(0, 0, 16 + pulse * 8, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.22)';
+                ctx.fill();
+
+                ctx.rotate(av.angle);
+                // High-Visibility Captain Vehicle Capsule
+                ctx.fillStyle = vColor;
+                ctx.shadowColor = vColor;
+                ctx.shadowBlur = 14;
+                ctx.beginPath();
+                ctx.roundRect(-11, -6, 22, 12, 4);
+                ctx.fill();
+
+                // Windshield detail
+                ctx.fillStyle = '#090D16';
+                ctx.fillRect(2, -4, 5, 8);
+                ctx.restore();
+            }
+
+            requestAnimationFrame(animateCityMap);
+        }
+
+        // ============================================================================
+        // CUSTOM NON-BLOCKING TOAST NOTIFICATIONS
+        // ============================================================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const styles = {
+                success: 'border-emerald-500/50 bg-slate-900/95 text-emerald-300',
+                warning: 'border-amber-500/50 bg-slate-900/95 text-amber-300',
+                error: 'border-rose-500/50 bg-slate-900/95 text-rose-300',
+                info: 'border-cyan-500/50 bg-slate-900/95 text-slate-100'
+            };
+
+            const icons = {
+                success: 'fa-circle-check text-emerald-400',
+                warning: 'fa-triangle-exclamation text-amber-400',
+                error: 'fa-circle-xmark text-rose-400',
+                info: 'fa-bolt text-yellow-400'
+            };
+
+            toast.className = `px-4 py-2.5 rounded-2xl border shadow-2xl backdrop-blur-md text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 transform translate-y-0 opacity-100 ${styles[type] || styles.info}`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${message}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+    </script>
+</body>
+</html>
